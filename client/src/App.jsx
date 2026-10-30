@@ -3,6 +3,8 @@ import LandingPage from './pages/LandingPage'
 import './App.css'
 import Login from './pages/student/Login'
 import DashboardLayout from './pages/student/DashboardLayout'
+import FacultyLogin from './pages/faculty/Login'
+import FacultyDashboardLayout from './pages/faculty/FacultyDashboardLayout'
 
 function App() {
   
@@ -11,7 +13,9 @@ function App() {
     <>
       {/* <LandingPage/> */}
       {/* <Login/> */}
-      <DashboardLayout/>
+      {/* <DashboardLayout/> */}
+      {/* <FacultyLogin/> */}
+      <FacultyDashboardLayout/>
     </>
   )
 }
