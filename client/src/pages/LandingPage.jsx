@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Sparkles, 
   BookOpen, 
@@ -28,6 +29,19 @@ export default function LandingPage() {
   const [demoIndex, setDemoIndex] = useState(0);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState(0);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const loginRef = useRef(null);
+
+  // Close the login dropdown when clicking outside of it
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (loginRef.current && !loginRef.current.contains(e.target)) {
+        setLoginOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Client-focused interactive demo scenarios
   const demoScenarios = [
@@ -103,17 +117,40 @@ export default function LandingPage() {
             <a href="#faqs" className="hover:text-blue-900 transition-colors">FAQs</a>
           </nav>
 
-          {/* Login & Primary CTA */}
+          {/* Login Dropdown */}
           <div className="hidden md:flex items-center gap-3">
-            <button className="text-sm font-semibold text-slate-700 hover:text-blue-900 px-4 py-2 transition-colors">
-              Log In
-            </button>
-            <a
-              href="#interactive-demo"
-              className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-blue-900 hover:bg-blue-800 text-white shadow-sm transition-all"
-            >
-              Get Started
-            </a>
+            <div className="relative" ref={loginRef}>
+              <button
+                onClick={() => setLoginOpen(!loginOpen)}
+                className="text-sm font-semibold text-slate-700 hover:text-blue-900 px-4 py-2 transition-colors flex items-center gap-1.5"
+              >
+                Log In
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-200 ${loginOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {loginOpen && (
+                <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50">
+                  <Link
+                    to="/login/student"
+                    onClick={() => setLoginOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-900 transition-colors"
+                  >
+                    <GraduationCap className="w-4 h-4" />
+                    Login as Student
+                  </Link>
+                  <Link
+                    to="/login/faculty"
+                    onClick={() => setLoginOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-900 transition-colors"
+                  >
+                    <Users className="w-4 h-4" />
+                    Login as Faculty
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -137,16 +174,20 @@ export default function LandingPage() {
               <a href="#faqs" onClick={() => setMobileMenuOpen(false)}>FAQs</a>
             </nav>
             <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
-              <button className="w-full py-2.5 text-center text-slate-700 font-semibold text-sm">
-                Log In
-              </button>
-              <a
-                href="#interactive-demo"
+              <Link
+                to="/login/student"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full py-2.5 text-center rounded-lg bg-blue-900 text-white font-semibold text-sm"
               >
-                Get Started
-              </a>
+                Login as Student
+              </Link>
+              <Link
+                to="/login/faculty"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full py-2.5 text-center rounded-lg border border-slate-300 text-slate-700 font-semibold text-sm"
+              >
+                Login as Faculty
+              </Link>
             </div>
           </div>
         )}
