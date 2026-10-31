@@ -9,24 +9,64 @@ export default function FacultyLogin({ onLoginSuccess, onSwitchToStudent }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (!email || !password) return;
+  const handleLogin = async (e) => {
+  e.preventDefault();
 
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      // Simulate successful faculty login object
-      const facultyData = {
-        name: email.includes('rajesh') ? 'Dr. Rajesh Sharma' : 'Prof. Faculty Member',
-        email: email,
-        department: 'Computer Science & Engineering',
-        designation: 'Associate Professor',
-        cabin: 'Block A, Room 204'
-      };
-      if (onLoginSuccess) onLoginSuccess(facultyData);
-    }, 1000);
-  };
+  if (!email.trim() || !password) {
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    const response = await fetch(
+      'http://127.0.0.1:8000/api/auth/faculty/login',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || 'Login failed. Please check your credentials.'
+      );
+    }
+
+    // Save the authentication details.
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('user_type', data.user_type);
+    localStorage.setItem('user_id', String(data.user_id));
+    localStorage.setItem('user_name', data.name);
+
+    // Pass real faculty details to the existing application.
+    const facultyData = {
+      id: data.user_id,
+      name: data.name,
+      email: data.email || email.trim(),
+      user_type: data.user_type,
+    };
+
+    if (onLoginSuccess) {
+      onLoginSuccess(facultyData);
+    }
+  } catch (error) {
+    alert(
+      error.message ||
+      'Unable to connect to the server. Please try again.'
+    );
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans text-slate-800">

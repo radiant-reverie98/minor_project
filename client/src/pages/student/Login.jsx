@@ -29,37 +29,70 @@ export default function Login() {
   const [resetSubmitted, setResetSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    setErrorMessage('');
+  const handleLogin = async (e) => {
+  e.preventDefault();
+  setErrorMessage('');
 
-    if (!emailOrId.trim()) {
-      setErrorMessage('Please enter your University Email or Student ID.');
-      return;
+  if (!emailOrId.trim()) {
+    setErrorMessage('Please enter your university email.');
+    return;
+  }
+
+  if (!password) {
+    setErrorMessage('Please enter your password.');
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    const response = await fetch(
+      'http://127.0.0.1:8000/api/auth/student/login',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: emailOrId.trim(),
+          password: password,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || 'Login failed. Please check your credentials.'
+      );
     }
 
-    if (!password) {
-      setErrorMessage('Please enter your password.');
-      return;
-    }
+    // Save the authentication token and student details.
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('user_type', data.user_type);
+    localStorage.setItem('user_id', String(data.user_id));
+    localStorage.setItem('user_name', data.name);
 
-    setIsLoading(true);
+    setToastMessage({
+      type: 'success',
+      title: 'Login Successful',
+      desc: 'Redirecting to your Student Dashboard...',
+    });
 
-    // Simulate authentication API call
     setTimeout(() => {
-      setIsLoading(false);
-      setToastMessage({
-        type: 'success',
-        title: 'Authentication Successful',
-        desc: 'Redirecting to your Student Dashboard...'
-      });
+      setToastMessage(null);
+    }, 4000);
 
-      // Clear toast after 4 seconds
-      setTimeout(() => {
-        setToastMessage(null);
-      }, 4000);
-    }, 1200);
-  };
+    window.location.href = '/student/dashboard';
+  } catch (error) {
+    setErrorMessage(
+      error.message || 'Unable to connect to the server. Please try again.'
+    );
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleResetSubmit = (e) => {
     e.preventDefault();
