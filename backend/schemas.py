@@ -1,7 +1,13 @@
 from datetime import date, datetime, time
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    model_validator,
+)
 
 
 # =====================================================
@@ -65,6 +71,20 @@ class FacultyCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     department: Optional[str] = Field(default=None, max_length=100)
     designation: Optional[str] = Field(default=None, max_length=100)
+    bio: Optional[str] = None
+    expertise: Optional[str] = None
+    profile_image: Optional[str] = Field(default=None, max_length=500)
+    office_location: Optional[str] = Field(default=None, max_length=100)
+
+
+class FacultyUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    department: Optional[str] = Field(default=None, max_length=100)
+    designation: Optional[str] = Field(default=None, max_length=100)
+    bio: Optional[str] = None
+    expertise: Optional[str] = None
+    profile_image: Optional[str] = Field(default=None, max_length=500)
+    office_location: Optional[str] = Field(default=None, max_length=100)
 
 
 class FacultyResponse(ORMBase):
@@ -75,6 +95,10 @@ class FacultyResponse(ORMBase):
     designation: Optional[str] = None
     is_active: bool
     created_at: datetime
+    bio: Optional[str] = None
+    expertise: Optional[str] = None
+    profile_image: Optional[str] = None
+    office_location: Optional[str] = None
 
 
 # =====================================================
@@ -100,6 +124,7 @@ class AppointmentCreate(BaseModel):
 
 class AppointmentStatusUpdate(BaseModel):
     status: Literal["confirmed", "completed", "rejected", "cancelled"]
+    meeting_link: Optional[str] = Field(default=None, max_length=500)
 
 
 class AppointmentResponse(ORMBase):
@@ -111,9 +136,15 @@ class AppointmentResponse(ORMBase):
     topic: str
     description: Optional[str] = None
     status: AppointmentStatus
+    active_slot_id: Optional[int] = None
+    meeting_link: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
+
+# =====================================================
+# AVAILABILITY SLOT SCHEMAS
+# =====================================================
 
 class AvailabilitySlotCreate(BaseModel):
     slot_date: date
@@ -138,11 +169,15 @@ class AvailabilitySlotResponse(ORMBase):
 
 
 # =====================================================
-# CHAT SCHEMAS
+# CHAT HISTORY SCHEMAS
 # =====================================================
 
 class ChatCreate(BaseModel):
-    title: str = Field(default="New Conversation", min_length=1, max_length=255)
+    title: str = Field(
+        default="New Conversation",
+        min_length=1,
+        max_length=255,
+    )
 
 
 class ChatResponse(ORMBase):
@@ -158,8 +193,13 @@ class ChatResponse(ORMBase):
     solved_by: Optional[int] = None
 
 
+# =====================================================
+# CHAT MESSAGE SCHEMAS
+# =====================================================
+
 class ChatMessageCreate(BaseModel):
-    role: Literal["user"]
+    # The public student endpoint accepts only user messages.
+    role: Literal["user"] = "user"
     content: str = Field(min_length=1, max_length=10000)
 
 
@@ -169,6 +209,41 @@ class ChatMessageResponse(ORMBase):
     role: Literal["user", "assistant"]
     content: str
     created_at: datetime
+    message_metadata: Optional[dict[str, Any]] = None
+
+
+# =====================================================
+# RESOURCE SCHEMAS
+# Faculty-uploaded documents used by the RAG pipeline.
+# File bytes and vector embeddings are stored outside MySQL.
+# =====================================================
+
+class ResourceCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: Optional[str] = None
+    file_url: str = Field(min_length=1, max_length=500)
+    file_type: Optional[str] = Field(default=None, max_length=50)
+    is_published: bool = True
+
+
+class ResourceUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    file_url: Optional[str] = Field(default=None, max_length=500)
+    file_type: Optional[str] = Field(default=None, max_length=50)
+    is_published: Optional[bool] = None
+
+
+class ResourceResponse(ORMBase):
+    id: int
+    faculty_id: int
+    title: str
+    description: Optional[str] = None
+    file_url: str
+    file_type: Optional[str] = None
+    is_published: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 # =====================================================

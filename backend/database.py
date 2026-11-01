@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from urllib.parse import quote_plus
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
@@ -31,6 +31,13 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_recycle=300,
 )
+try:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+        print("✅ Database connected successfully!")
+except Exception as e:
+    print(f"❌ Database connection failed: {e}")
+    raise
 
 SessionLocal = sessionmaker(
     autocommit=False,

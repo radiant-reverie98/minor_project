@@ -1,7 +1,8 @@
+from typing import Literal
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from rag_chat import ask_bodhi
 
@@ -9,40 +10,39 @@ app = FastAPI(title="Bodhi AI API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict this in production
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-# Temporary in-memory conversation storage
-sessions = {}
+
+class HistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
 
 
 class ChatRequest(BaseModel):
-    session_id: str
-    question: str
+    session_id: str = Field(min_length=1, max_length=100)
+    question: str = Field(min_length=1, max_length=10000)
+    chat_history: list[HistoryMessage] = Field(default_factory=list)
 
 
 @app.post("/chat")
 def chat(request: ChatRequest):
+    history = [
+        {"role": item.role, "content": item.content}
+        for item in request.chat_history[-10:]
+    ]
 
-    session_id = request.session_id
+    try:
+        answer = ask_bodhi(request.question.strip(), history)
+    except Exception as exc:
+        # Log full exception in the server console; avoid exposing secrets to clients.
+        print(f"Bodhi generation error: {exc}")
+        raise HTTPException(status_code=503, detail="Bodhi could not generate a response.")
 
-    if session_id not in sessions:
-        sessions[session_id] = []
-
-    history = sessions[session_id]
-
-    answer = ask_bodhi(
-        request.question,
-        history
-    )
-
-    return {
-        "session_id": session_id,
-        "answer": answer
-    }
+    return {"session_id": request.session_id, "answer": answer}
 
 
 @app.get("/")
