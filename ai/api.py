@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from rag_chat import ask_bodhi
+from rag_chat import ask_bodhi, retrieve_faculty_matches
 
 app = FastAPI(title="Bodhi AI API")
 
@@ -42,7 +42,17 @@ def chat(request: ChatRequest):
         print(f"Bodhi generation error: {exc}")
         raise HTTPException(status_code=503, detail="Bodhi could not generate a response.")
 
-    return {"session_id": request.session_id, "answer": answer}
+    try:
+        faculty_matches = retrieve_faculty_matches(request.question)
+    except Exception as exc:
+        print(f"Faculty retrieval error: {exc}")
+        faculty_matches = []
+
+    return {
+        "session_id": request.session_id,
+        "answer": answer,
+        "faculty_matches": faculty_matches,
+    }
 
 
 @app.get("/")
