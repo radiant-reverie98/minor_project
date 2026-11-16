@@ -114,7 +114,11 @@ def resolve_booking_faculty(content, recommendations, faculty_rows, previous_boo
     if len(named) > 1:
         return None
 
-    if previous_booking_id and re.search(r"\b(him|her|them|his|their|that faculty member|that professor)\b", content.lower()):
+    if previous_booking_id and (
+        re.search(r"\b(him|her|them|his|their|that faculty member|that professor)\b", content.lower())
+        or re.search(r"\b(first|second|third|1st|2nd|3rd)\s+slot\b", content.lower())
+        or re.search(r"\b(availability|available slots|free slots)\b", content.lower())
+    ):
         previous = next((p for p in faculty_rows if p.id == previous_booking_id), None)
         if previous:
             return previous
