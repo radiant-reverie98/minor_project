@@ -149,7 +149,7 @@ export default function AskBodhi() {
     }
   };
 
-  const openBooking = async (faculty, topic) => {
+  const openBooking = async (faculty, topic, preferredSlotId = '') => {
     setBookingFaculty(faculty);
     setBookingSlots([]);
     setSelectedSlot('');
@@ -158,6 +158,9 @@ export default function AskBodhi() {
     try {
       const slots = await request(`/api/faculty/${faculty.id}/slots`);
       setBookingSlots(slots);
+      if (preferredSlotId && slots.some((slot) => String(slot.id) === String(preferredSlotId))) {
+        setSelectedSlot(String(preferredSlotId));
+      }
       if (!slots.length) setBookingError('No available slots in the next 30 days.');
     } catch (err) {
       setBookingError(err.message);
@@ -277,7 +280,7 @@ export default function AskBodhi() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => openBooking(msg.metadata.faculty_booking, 'Academic guidance')}
+                    onClick={() => openBooking(msg.metadata.faculty_booking, 'Academic guidance', msg.metadata.preferred_slot_id || '')}
                     className="mt-2 px-3 py-2 bg-blue-900 text-white rounded-lg text-xs font-semibold hover:bg-blue-800"
                   >
                     Choose a slot
