@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies import require_student
-from models import ChatHistory, ChatMessage, Faculty
+from models import ChatHistory, ChatMessage, Faculty, Faculty
 
 router = APIRouter(prefix="/api/student/chats", tags=["Student Chats"])
 
@@ -183,10 +183,51 @@ def send_chat_message(
             detail="Could not get a response from Bodhi. Your message was saved; please try again.",
         )
 
+    # Map FAISS-retrieved faculty JSON profiles to active faculty accounts.
+    import re
+    rag_matches = payload.get("faculty_matches") or []
+    faculty_rows = db.query(Faculty).filter(Faculty.is_active.is_(True)).all()
+    by_name = {
+        re.sub(r"[^a-z0-9]", "", person.name.lower()): person
+        for person in faculty_rows
+    }
+    recommendations = []
+    for match in rag_matches:
+        person = by_name.get(re.sub(r"[^a-z0-9]", "", str(match.get("name", "")).lower()))
+        if person and float(match.get("distance", 99)) <= 1.8:
+            recommendations.append({
+                "id": person.id,
+                "name": person.name,
+                "department": person.department,
+                "designation": person.designation,
+                "expertise": person.expertise,
+                "match_score": round(1 / (1 + max(0, float(match.get("distance", 99)))), 3),
+            })
+    # If FAISS has no matching faculty profile, fall back to explicit expertise keywords.
+    if not recommendations:
+        terms = set(re.findall(r"[a-zA-Z0-9+#.]{2,}", content.lower()))
+        terms -= {"the", "and", "for", "with", "from", "can", "who", "help", "guide",
+                  "please", "about", "need", "want", "how", "what", "me"}
+        ranked = []
+        for person in faculty_rows:
+            profile = " ".join(filter(None, [
+                person.expertise, person.department, person.designation, person.bio
+            ])).lower()
+            overlap = terms & set(re.findall(r"[a-zA-Z0-9+#.]{2,}", profile))
+            if overlap:
+                ranked.append((len(overlap) / max(1, len(terms)), person))
+        ranked.sort(key=lambda item: (-item[0], item[1].name.lower()))
+        recommendations = [{
+            "id": person.id, "name": person.name, "department": person.department,
+            "designation": person.designation, "expertise": person.expertise,
+            "match_score": round(score, 3),
+        } for score, person in ranked[:3]]
+
     assistant_message = ChatMessage(
         chat_id=chat.id,
         role="assistant",
         content=answer.strip(),
+        message_metadata={"faculty_recommendations": recommendations},
     )
     db.add(assistant_message)
     chat.updated_at = datetime.utcnow()
