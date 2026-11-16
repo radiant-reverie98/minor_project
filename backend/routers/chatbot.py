@@ -79,6 +79,8 @@ def is_booking_request(content: str) -> bool:
         and re.search(r"\b(appointment|meeting|consultation|slot)\b", text)
         or re.search(r"\b(book|schedule)\s+(him|her|them|it)\b", text)
         or re.search(r"\b(meet|talk to)\s+(him|her|them)\b", text)
+        or re.search(r"\b(show|check|see|view)\b.*\b(availability|available slots|free slots)\b", text)
+        or re.search(r"\b(first|second|third|1st|2nd|3rd)\s+slot\b", text)
     )
 
 
@@ -102,6 +104,11 @@ def resolve_booking_faculty(content, recommendations, faculty_rows):
         return named[0]
     if len(named) > 1:
         return None
+
+    # Resolve the faculty from a prior booking prompt, or the latest recommendation.
+    if re.search(r"\b(him|her|them|his|her|their)\b", content.lower()):
+        # The caller supplies recent messages through recommendation metadata below.
+        pass
 
     # Resolve conversational references such as "book him" from the last
     # recommendation card, using its database ID rather than guessing a name.
