@@ -96,6 +96,33 @@ answer_prompt = ChatPromptTemplate.from_messages([
 ])
 
 
+
+def retrieve_faculty_matches(query, k=12):
+    """Retrieve complete faculty JSON profiles from FAISS, not generic policy chunks."""
+    results = vector_store.similarity_search_with_score(query, k=k)
+    matches = []
+    seen = set()
+    for doc, distance in results:
+        metadata = doc.metadata or {}
+        faculty_id = str(metadata.get("faculty_id") or "").strip()
+        if metadata.get("document_type") != "json" or not faculty_id or faculty_id in seen:
+            continue
+        seen.add(faculty_id)
+        name = ""
+        for line in doc.page_content.splitlines():
+            if line.lower().startswith("name:"):
+                name = line.split(":", 1)[1].strip()
+                break
+        if name:
+            matches.append({
+                "faculty_id": faculty_id,
+                "name": name,
+                "profile": doc.page_content,
+                "distance": float(distance),
+            })
+    return sorted(matches, key=lambda item: item["distance"])[:5]
+
+
 def ask_bodhi(question, chat_history):
     history = to_langchain_history(chat_history)
     standalone_question = rewrite_question(question, history)
