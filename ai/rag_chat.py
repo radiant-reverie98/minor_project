@@ -97,7 +97,7 @@ answer_prompt = ChatPromptTemplate.from_messages([
 
 
 
-def retrieve_faculty_matches(query, k=12):
+def retrieve_faculty_matches(query, k=40):
     """Retrieve complete faculty JSON profiles from FAISS, not generic policy chunks."""
     results = vector_store.similarity_search_with_score(query, k=k)
     matches = []
