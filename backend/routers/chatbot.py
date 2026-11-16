@@ -81,6 +81,8 @@ def is_booking_request(content: str) -> bool:
         or re.search(r"\b(meet|talk to)\s+(him|her|them)\b", text)
         or re.search(r"\b(show|check|see|view)\b.*\b(availability|available slots|free slots)\b", text)
         or re.search(r"\b(first|second|third|1st|2nd|3rd)\s+slot\b", text)
+        or re.search(r"\b(availability|available slots|free slots)\b", text)
+        or re.search(r"\b(meet|talk to|consult)\b.*\b(dr\.?|professor|prof\.?)\b", text)
     )
 
 
