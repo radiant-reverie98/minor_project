@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import httpx
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies import require_student
-from models import ChatHistory, ChatMessage, Faculty, Faculty
+from models import Appointment, AvailabilitySlot, ChatHistory, ChatMessage, Faculty
 
 router = APIRouter(prefix="/api/student/chats", tags=["Student Chats"])
 
@@ -64,6 +64,65 @@ def get_owned_chat(db: Session, chat_id: int, student_id: int) -> ChatHistory:
     if chat.status != "open":
         raise HTTPException(status_code=409, detail="This conversation is closed")
     return chat
+
+
+def normalize_name(value: str) -> str:
+    value = re.sub(r"^(dr|prof|professor)\.?\s*", "", value.strip().lower())
+    return re.sub(r"[^a-z0-9]", "", value)
+
+
+def is_booking_request(content: str) -> bool:
+    text = content.lower()
+    return bool(
+        re.search(r"\b(book|schedule|arrange|set up|request)\b", text)
+        and re.search(r"\b(appointment|meeting|consultation|slot)\b", text)
+        or re.search(r"\b(book|schedule)\s+(him|her|them|it)\b", text)
+        or re.search(r"\b(meet|talk to)\s+(him|her|them)\b", text)
+    )
+
+
+def latest_recommendations(messages):
+    for message in reversed(messages):
+        if message.role == "assistant":
+            metadata = message.message_metadata or {}
+            recommendations = metadata.get("faculty_recommendations") or []
+            if recommendations:
+                return recommendations
+    return []
+
+
+def resolve_booking_faculty(content, recommendations, faculty_rows):
+    normalized_content = normalize_name(content)
+    named = [
+        person for person in faculty_rows
+        if normalize_name(person.name) in normalized_content
+    ]
+    if len(named) == 1:
+        return named[0]
+    if len(named) > 1:
+        return None
+
+    # Resolve conversational references such as "book him" from the last
+    # recommendation card, using its database ID rather than guessing a name.
+    if re.search(r"\b(him|her|them|that teacher|that professor|the recommended)\b", content.lower()):
+        recommended_ids = [item.get("id") for item in recommendations if item.get("id")]
+        if len(recommended_ids) == 1:
+            return next((p for p in faculty_rows if p.id == recommended_ids[0]), None)
+
+    if len(recommendations) == 1:
+        recommendation_id = recommendations[0].get("id")
+        return next((p for p in faculty_rows if p.id == recommendation_id), None)
+    return None
+
+
+def faculty_card(person):
+    return {
+        "id": person.id,
+        "name": person.name,
+        "department": person.department,
+        "designation": person.designation,
+        "expertise": person.expertise,
+    }
 
 
 @router.post("/", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
@@ -149,6 +208,62 @@ def send_chat_message(
     chat.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(user_message)
+
+    # Handle appointment intent in the application backend, not through RAG.
+    # This keeps faculty identity and booking actions tied to real DB records.
+    if is_booking_request(content):
+        import re
+
+        faculty_rows = db.query(Faculty).filter(Faculty.is_active.is_(True)).all()
+        recommendations = latest_recommendations(previous_messages)
+        faculty = resolve_booking_faculty(content, recommendations, faculty_rows)
+
+        if faculty is None:
+            if len(recommendations) > 1 and not re.search(r"\b(dr\.?|professor|prof\.)\b", content.lower()):
+                answer = "Which faculty member would you like to book with? Please mention their name or choose one of the recommended faculty cards."
+            else:
+                answer = "I couldn't match that name to an active faculty account. Please check the faculty member's name or choose them from the recommended faculty cards."
+            metadata = {"faculty_recommendations": recommendations}
+        else:
+            from_date = date.today()
+            to_date = from_date + timedelta(days=30)
+            slots = db.query(AvailabilitySlot).filter(
+                AvailabilitySlot.faculty_id == faculty.id,
+                AvailabilitySlot.slot_date.between(from_date, to_date),
+                AvailabilitySlot.is_available.is_(True),
+                ~AvailabilitySlot.appointments.any(
+                    Appointment.status.in_(["pending", "confirmed", "completed"])
+                ),
+            ).order_by(
+                AvailabilitySlot.slot_date, AvailabilitySlot.start_time
+            ).all()
+
+            metadata = {
+                "faculty_booking": faculty_card(faculty),
+                "faculty_recommendations": recommendations,
+            }
+            if slots:
+                answer = (
+                    f"Absolutely! I found {faculty.name}. Use the **Choose a slot** button "
+                    "below to view their available consultation times and send an appointment request."
+                )
+            else:
+                answer = (
+                    f"I found {faculty.name}, but they have no available appointment slots "
+                    "in the next 30 days. Please check again later or choose another faculty member."
+                )
+
+        assistant_message = ChatMessage(
+            chat_id=chat.id,
+            role="assistant",
+            content=answer,
+            message_metadata=metadata,
+        )
+        db.add(assistant_message)
+        chat.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(assistant_message)
+        return {"user_message": user_message, "assistant_message": assistant_message}
 
     try:
         with httpx.Client(timeout=AI_TIMEOUT_SECONDS) as client:
