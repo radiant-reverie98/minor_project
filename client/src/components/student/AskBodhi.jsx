@@ -24,6 +24,12 @@ export default function AskBodhi() {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState('');
+  const [bookingFaculty, setBookingFaculty] = useState(null);
+  const [bookingSlots, setBookingSlots] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState('');
+  const [bookingTopic, setBookingTopic] = useState('Academic guidance');
+  const [bookingBusy, setBookingBusy] = useState(false);
+  const [bookingError, setBookingError] = useState('');
 
   const request = useCallback(async (path, options = {}) => {
     const token = getToken();
@@ -143,6 +149,54 @@ export default function AskBodhi() {
     }
   };
 
+  const openBooking = async (faculty, topic) => {
+    setBookingFaculty(faculty);
+    setBookingSlots([]);
+    setSelectedSlot('');
+    setBookingTopic(topic || 'Academic guidance');
+    setBookingError('');
+    try {
+      const slots = await request(`/api/faculty/${faculty.id}/slots`);
+      setBookingSlots(slots);
+      if (!slots.length) setBookingError('No available slots in the next 30 days.');
+    } catch (err) {
+      setBookingError(err.message);
+    }
+  };
+
+  const submitBooking = async () => {
+    if (!bookingFaculty || !selectedSlot) return;
+    setBookingBusy(true);
+    setBookingError('');
+    try {
+      await request('/api/appointments/', {
+        method: 'POST',
+        body: JSON.stringify({
+          faculty_id: bookingFaculty.id,
+          slot_id: Number(selectedSlot),
+          chat_id: chatId,
+          topic: bookingTopic.trim() || 'Academic guidance',
+        }),
+      });
+      setBookingFaculty(null);
+      setBookingSlots([]);
+      setSelectedSlot('');
+      setMessages((previous) => [...previous, {
+        id: `booking-${Date.now()}`, sender: 'bodhi',
+        text: `Your appointment request with ${bookingFaculty.name} has been sent. You can track its status in Meeting Center.`,
+        time: 'Just now',
+      }]);
+    } catch (err) {
+      setBookingError(err.message);
+      try {
+        const fresh = await request(`/api/faculty/${bookingFaculty.id}/slots`);
+        setBookingSlots(fresh);
+      } catch { /* keep the original booking error */ }
+    } finally {
+      setBookingBusy(false);
+    }
+  };
+
   const handleNewChat = async () => {
     if (loading) return;
     setError('');
@@ -213,14 +267,26 @@ export default function AskBodhi() {
                 </div>
               )}
 
-              {msg.metadata?.facultySuggestion && (
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs">
-                  <div className="flex items-center gap-2 text-blue-900 font-bold mb-1">
-                    <UserCheck className="w-4 h-4" />
-                    Recommended Faculty
+              {(msg.metadata?.faculty_recommendations?.length > 0 || msg.metadata?.facultySuggestion) && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2 text-blue-900 font-bold text-xs">
+                    <UserCheck className="w-4 h-4" /> Recommended Faculty
                   </div>
-                  <p className="font-semibold text-slate-900">{msg.metadata.facultySuggestion.name}</p>
-                  <p className="text-slate-500">{msg.metadata.facultySuggestion.department}</p>
+                  {(msg.metadata.faculty_recommendations || [msg.metadata.facultySuggestion]).map((person) => (
+                    <div key={person.id || person.name} className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{person.name}</p>
+                          <p className="text-slate-500">{person.designation || person.department || 'Faculty'}</p>
+                          {person.expertise && <p className="text-slate-600 mt-1">{person.expertise}</p>}
+                        </div>
+                        {person.id && <button type="button" onClick={() => openBooking(person, msg.text.slice(0, 200))}
+                          className="shrink-0 px-3 py-2 bg-blue-900 text-white rounded-lg font-semibold hover:bg-blue-800">
+                          View slots
+                        </button>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -242,6 +308,42 @@ export default function AskBodhi() {
           </div>
         )}
       </div>
+
+      {bookingFaculty && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl p-5 space-y-4">
+            <div className="flex items-start justify-between">
+              <div><h3 className="font-bold text-slate-900">Book a consultation</h3>
+                <p className="text-sm text-slate-500">With {bookingFaculty.name}</p></div>
+              <button type="button" onClick={() => setBookingFaculty(null)} className="text-slate-500 hover:text-slate-900">✕</button>
+            </div>
+            <label className="block text-xs font-semibold text-slate-600">Discussion topic
+              <input value={bookingTopic} onChange={(e) => setBookingTopic(e.target.value)} maxLength={200}
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </label>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-600">Available slots (next 30 days)</p>
+              {bookingSlots.map((slot) => (
+                <label key={slot.id} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${String(slot.id) === selectedSlot ? 'border-blue-700 bg-blue-50' : 'border-slate-200'}`}>
+                  <span className="text-sm">{new Date(`${slot.slot_date}T00:00:00`).toLocaleDateString()} · {slot.start_time}–{slot.end_time}</span>
+                  <input type="radio" name="booking-slot" value={slot.id} checked={String(slot.id) === selectedSlot}
+                    onChange={() => setSelectedSlot(String(slot.id))} />
+                </label>
+              ))}
+              {!bookingSlots.length && !bookingError && <p className="text-sm text-slate-500">Loading available slots…</p>}
+            </div>
+            {bookingError && <p className="text-sm text-red-600">{bookingError}</p>}
+            <p className="text-xs text-slate-500">Your request will remain pending until the faculty member responds.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setBookingFaculty(null)} className="px-4 py-2 border rounded-lg text-sm">Cancel</button>
+              <button type="button" disabled={!selectedSlot || bookingBusy} onClick={submitBooking}
+                className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+                {bookingBusy ? 'Sending…' : 'Request appointment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-200 flex gap-2">
         <input
