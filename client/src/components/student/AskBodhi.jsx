@@ -267,6 +267,24 @@ export default function AskBodhi() {
                 </div>
               )}
 
+              {msg.metadata?.faculty_booking?.id && (
+                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                  <p className="text-xs font-semibold text-slate-800">
+                    Appointment with {msg.metadata.faculty_booking.name}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Choose an available time and send your appointment request.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openBooking(msg.metadata.faculty_booking, 'Academic guidance')}
+                    className="mt-2 px-3 py-2 bg-blue-900 text-white rounded-lg text-xs font-semibold hover:bg-blue-800"
+                  >
+                    Choose a slot
+                  </button>
+                </div>
+              )}
+
               {(msg.metadata?.faculty_recommendations?.length > 0 || msg.metadata?.facultySuggestion) && (
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center gap-2 text-blue-900 font-bold text-xs">
