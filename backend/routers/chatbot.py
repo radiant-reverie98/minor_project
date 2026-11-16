@@ -105,7 +105,27 @@ def latest_booking_faculty(messages):
     return None
 
 
-def resolve_booking_faculty(content, recommendations, faculty_rows, previous_booking_id=None):
+def latest_assistant_text(messages):
+    for message in reversed(messages):
+        if message.role == "assistant":
+            return message.content or ""
+    return ""
+
+
+def resolve_pronoun_target(assistant_text, faculty_rows):
+    # If a reply lists several faculty, resolve "him" using the uniquely
+    # named faculty in its final recommendation sentence.
+    sentences = re.split(r"(?<=[.!?])\s+", assistant_text.strip())
+    if not sentences:
+        return None
+    matches = [
+        person for person in faculty_rows
+        if normalize_name(person.name) in normalize_name(sentences[-1])
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def resolve_booking_faculty(content, recommendations, faculty_rows, previous_booking_id=None, previous_assistant_text=''):
     normalized_content = normalize_name(content)
     named = [
         person for person in faculty_rows
@@ -124,6 +144,12 @@ def resolve_booking_faculty(content, recommendations, faculty_rows, previous_boo
         previous = next((p for p in faculty_rows if p.id == previous_booking_id), None)
         if previous:
             return previous
+
+
+    if re.search(r"\b(him|her|them|his|their)\b", content.lower()):
+        target = resolve_pronoun_target(previous_assistant_text, faculty_rows)
+        if target:
+            return target
 
     # Resolve conversational references such as "book him" from the last
     # recommendation card, using its database ID rather than guessing a name.
@@ -239,7 +265,10 @@ def send_chat_message(
 
         faculty_rows = db.query(Faculty).filter(Faculty.is_active.is_(True)).all()
         recommendations = latest_recommendations(previous_messages)
-        faculty = resolve_booking_faculty(content, recommendations, faculty_rows, latest_booking_faculty(previous_messages))
+        faculty = resolve_booking_faculty(
+            content, recommendations, faculty_rows,
+            latest_booking_faculty(previous_messages), latest_assistant_text(previous_messages)
+        )
 
         if faculty is None:
             if len(recommendations) > 1 and not re.search(r"\b(dr\.?|professor|prof\.)\b", content.lower()):
