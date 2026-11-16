@@ -2,6 +2,8 @@ import os
 from datetime import timedelta
 from dependencies import require_student, require_faculty
 from routers.chatbot import router as chatbot_router
+from routers.faculty import router as faculty_router
+from routers.appointments import router as appointments_router
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -17,6 +19,8 @@ from auth import verify_password, create_access_token
 
 app = FastAPI(title="FacultyConnect AI API")
 app.include_router(chatbot_router)
+app.include_router(faculty_router)
+app.include_router(appointments_router)
 
 # Allow the React frontend to communicate with the backend.
 app.add_middleware(

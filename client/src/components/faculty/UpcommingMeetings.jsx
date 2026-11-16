@@ -1,134 +1,75 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, GraduationCap, FileText, CheckCircle, XCircle, Search } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Calendar, Clock, GraduationCap, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+
+const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const token = () => localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('accessToken');
 
 export default function UpcomingMeetings() {
-  const [meetings, setMeetings] = useState([
-    {
-      id: 1,
-      studentName: 'Tejendra Singh',
-      branch: 'Computer Science & Engineering',
-      rollNo: '23CS101',
-      date: 'Today',
-      time: '03:30 PM - 04:00 PM',
-      topic: 'DBMS Query Optimization & Normalization',
-      description: 'Student has doubts regarding 3NF vs BCNF decomposition and needs assistance with indexed queries for the upcoming mid-sem project.',
-      status: 'Confirmed'
-    },
-    {
-      id: 2,
-      studentName: 'Priya Sharma',
-      branch: 'Information Technology',
-      rollNo: '23IT045',
-      date: 'Tomorrow',
-      time: '11:00 AM - 11:30 AM',
-      topic: 'B.Tech Major Project Guidance',
-      description: 'Needs approval on project architecture diagram and database schema setup for automated attendance tracker.',
-      status: 'Pending'
-    },
-    {
-      id: 3,
-      studentName: 'Aman Mathur',
-      branch: 'Computer Science & Engineering',
-      rollNo: '23CS012',
-      date: 'Nov 02, 2026',
-      time: '02:00 PM - 02:30 PM',
-      topic: 'Mid-Sem Paper Re-evaluation',
-      description: 'Wants to discuss question #4 evaluation from Database Systems paper.',
-      status: 'Confirmed'
-    }
-  ]);
+  const [meetings, setMeetings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState(null);
 
-  const handleAction = (id, newStatus) => {
-    setMeetings((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
-    );
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const response = await fetch(`${API}/api/appointments/faculty`, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not load appointment requests.');
+      setMeetings(data);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const update = async (id, status) => {
+    setBusyId(id); setError('');
+    try {
+      const response = await fetch(`${API}/api/appointments/${id}/faculty-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ status }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not update appointment.');
+      await load();
+    } catch (err) { setError(err.message); }
+    finally { setBusyId(null); }
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Upcoming Meetings</h1>
-        <p className="text-sm text-slate-500">Review scheduled consultations and student appointment queries.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h1 className="text-xl font-bold text-slate-900">Appointment Requests</h1>
+          <p className="text-sm text-slate-500">Review student requests and manage consultations.</p></div>
+        <button onClick={load} className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2"><RefreshCw className="w-4 h-4"/>Refresh</button>
       </div>
-
-      {/* Meeting Cards Grid */}
-      <div className="grid grid-cols-1 gap-4">
-        {meetings.map((meeting) => (
-          <div
-            key={meeting.id}
-            className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm hover:border-slate-300 transition-all flex flex-col gap-4"
-          >
-            {/* Header: Student Info & Status */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-900 font-bold flex items-center justify-center text-sm border border-blue-200">
-                  {meeting.studentName.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-base">{meeting.studentName}</h3>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                    <span className="flex items-center gap-1">
-                      <GraduationCap className="w-3.5 h-3.5 text-blue-900" />
-                      {meeting.branch}
-                    </span>
-                    <span>•</span>
-                    <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
-                      {meeting.rollNo}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    meeting.status === 'Confirmed'
-                      ? 'bg-green-100 text-green-700 border border-green-200'
-                      : 'bg-amber-100 text-amber-700 border border-amber-200'
-                  }`}
-                >
-                  {meeting.status}
-                </span>
-                <div className="text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1.5 font-medium">
-                  <Clock className="w-3.5 h-3.5 text-blue-900" />
-                  <span>{meeting.date}, {meeting.time}</span>
-                </div>
-              </div>
+      {error && <p className="text-sm text-red-700 bg-red-50 p-3 rounded-lg">{error}</p>}
+      {loading ? <p className="text-sm text-slate-500">Loading appointments…</p> :
+        meetings.length === 0 ? <div className="bg-white border rounded-xl p-8 text-center text-sm text-slate-500">No appointment requests yet. Your available slots can be booked by students through Bodhi.</div> :
+        <div className="grid gap-4">{meetings.map((meeting) => (
+          <article key={meeting.id} className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-wrap justify-between gap-3">
+              <div><div className="flex items-center gap-2"><GraduationCap className="w-5 h-5 text-blue-900"/><h3 className="font-bold text-slate-900">{meeting.student_name}</h3></div>
+                <p className="text-xs text-slate-500 mt-1">{meeting.student_department || 'Student'}{meeting.student_roll_no ? ` · ${meeting.student_roll_no}` : ''}</p></div>
+              <span className={`h-fit px-3 py-1 rounded-full text-xs font-semibold capitalize ${meeting.status === 'confirmed' ? 'bg-green-100 text-green-700' : meeting.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{meeting.status}</span>
             </div>
-
-            {/* Content: Topic & Description */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                <FileText className="w-4 h-4 text-blue-900" />
-                <span>Topic: {meeting.topic}</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/70 p-3 rounded-xl border border-slate-100">
-                {meeting.description}
-              </p>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-2 pt-1">
-              {meeting.status === 'Pending' && (
-                <button
-                  onClick={() => handleAction(meeting.id, 'Confirmed')}
-                  className="px-3.5 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-semibold hover:bg-blue-800 flex items-center gap-1.5 transition-colors"
-                >
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  Accept Request
-                </button>
-              )}
-              <button
-                onClick={() => handleAction(meeting.id, 'Cancelled')}
-                className="px-3.5 py-1.5 border border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                Reschedule / Cancel
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+            <div><h4 className="font-semibold text-sm text-slate-800">{meeting.topic}</h4>
+              {meeting.description && <p className="text-sm text-slate-500 mt-1">{meeting.description}</p>}</div>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-600 border-t pt-3"><span className="flex items-center gap-1"><Calendar className="w-4 h-4"/>{meeting.slot_date}</span>
+              <span className="flex items-center gap-1"><Clock className="w-4 h-4"/>{meeting.start_time}–{meeting.end_time}</span></div>
+            {meeting.status === 'pending' && <div className="flex justify-end gap-2">
+              <button disabled={busyId === meeting.id} onClick={() => update(meeting.id, 'rejected')} className="px-3 py-2 border border-red-200 text-red-700 rounded-lg text-xs font-semibold flex items-center gap-1 disabled:opacity-50"><XCircle className="w-4 h-4"/>Reject</button>
+              <button disabled={busyId === meeting.id} onClick={() => update(meeting.id, 'confirmed')} className="px-3 py-2 bg-blue-900 text-white rounded-lg text-xs font-semibold flex items-center gap-1 disabled:opacity-50"><CheckCircle className="w-4 h-4"/>Accept request</button>
+            </div>}
+            {meeting.status === 'confirmed' && <div className="flex justify-end">
+              <button disabled={busyId === meeting.id} onClick={() => update(meeting.id, 'completed')} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold disabled:opacity-50">Mark completed</button>
+            </div>}
+          </article>
+        ))}</div>}
     </div>
   );
 }
