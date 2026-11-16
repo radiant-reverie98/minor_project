@@ -90,7 +90,7 @@ def public_slots(
     return [slot_dict(slot) for slot in slots]
 
 
-@router.get("/me/slots")
+@router.get("/availability/me/slots")
 def my_slots(
     from_date: date = Query(default_factory=date.today),
     to_date: date = Query(default_factory=lambda: date.today() + timedelta(days=60)),
@@ -112,7 +112,7 @@ def my_slots(
     return [{**slot_dict(slot), "is_booked": slot.id in booked_ids} for slot in slots]
 
 
-@router.post("/me/slots", status_code=201)
+@router.post("/availability/me/slots", status_code=201)
 def create_slot(
     data: SlotCreate,
     current_user: dict = Depends(require_faculty),
@@ -146,7 +146,7 @@ def create_slot(
     return slot_dict(slot)
 
 
-@router.patch("/me/slots/{slot_id}")
+@router.patch("/availability/me/slots/{slot_id}")
 def update_slot(
     slot_id: int,
     data: SlotAvailabilityUpdate,
