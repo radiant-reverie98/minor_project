@@ -280,7 +280,7 @@ export default function AskBodhi() {
                           <p className="text-slate-500">{person.designation || person.department || 'Faculty'}</p>
                           {person.expertise && <p className="text-slate-600 mt-1">{person.expertise}</p>}
                         </div>
-                        {person.id && <button type="button" onClick={() => openBooking(person, msg.text.slice(0, 200))}
+                        {person.id && <button type="button" onClick={() => openBooking(person, 'Academic guidance')}
                           className="shrink-0 px-3 py-2 bg-blue-900 text-white rounded-lg font-semibold hover:bg-blue-800">
                           View slots
                         </button>}
