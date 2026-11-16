@@ -94,7 +94,16 @@ def latest_recommendations(messages):
     return []
 
 
-def resolve_booking_faculty(content, recommendations, faculty_rows):
+def latest_booking_faculty(messages):
+    for message in reversed(messages):
+        if message.role == "assistant":
+            faculty = (message.message_metadata or {}).get("faculty_booking")
+            if faculty and faculty.get("id"):
+                return faculty["id"]
+    return None
+
+
+def resolve_booking_faculty(content, recommendations, faculty_rows, previous_booking_id=None):
     normalized_content = normalize_name(content)
     named = [
         person for person in faculty_rows
@@ -105,10 +114,10 @@ def resolve_booking_faculty(content, recommendations, faculty_rows):
     if len(named) > 1:
         return None
 
-    # Resolve the faculty from a prior booking prompt, or the latest recommendation.
-    if re.search(r"\b(him|her|them|his|her|their)\b", content.lower()):
-        # The caller supplies recent messages through recommendation metadata below.
-        pass
+    if previous_booking_id and re.search(r"\b(him|her|them|his|their|that faculty member|that professor)\b", content.lower()):
+        previous = next((p for p in faculty_rows if p.id == previous_booking_id), None)
+        if previous:
+            return previous
 
     # Resolve conversational references such as "book him" from the last
     # recommendation card, using its database ID rather than guessing a name.
@@ -224,7 +233,7 @@ def send_chat_message(
 
         faculty_rows = db.query(Faculty).filter(Faculty.is_active.is_(True)).all()
         recommendations = latest_recommendations(previous_messages)
-        faculty = resolve_booking_faculty(content, recommendations, faculty_rows)
+        faculty = resolve_booking_faculty(content, recommendations, faculty_rows, latest_booking_faculty(previous_messages))
 
         if faculty is None:
             if len(recommendations) > 1 and not re.search(r"\b(dr\.?|professor|prof\.)\b", content.lower()):
@@ -250,9 +259,22 @@ def send_chat_message(
                 "faculty_booking": faculty_card(faculty),
                 "faculty_recommendations": recommendations,
             }
-            if slots:
+            slot_match = re.search(r"\b(first|second|third|1st|2nd|3rd)\s+slot\b", content.lower())
+            if slots and slot_match:
+                slot_index = {"first": 0, "1st": 0, "second": 1, "2nd": 1, "third": 2, "3rd": 2}[slot_match.group(1)]
+                if slot_index < len(slots):
+                    metadata["preferred_slot_id"] = slots[slot_index].id
+                    chosen = slots[slot_index]
+                    answer = (
+                        f"The requested slot for {faculty.name} is {chosen.slot_date.isoformat()} "
+                        f"from {chosen.start_time.strftime('%H:%M')} to {chosen.end_time.strftime('%H:%M')}. "
+                        "Review the preselected slot below and click Request appointment to confirm."
+                    )
+                else:
+                    answer = f"{faculty.name} has only {len(slots)} available slot(s). Please choose one from the list below."
+            elif slots:
                 answer = (
-                    f"Absolutely! I found {faculty.name}. Use the **Choose a slot** button "
+                    f"Absolutely! I found {faculty.name}. Use the Choose a slot button "
                     "below to view their available consultation times and send an appointment request."
                 )
             else:
